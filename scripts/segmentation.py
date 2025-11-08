@@ -1,16 +1,15 @@
 import os
 from argparse import ArgumentParser
-
-import matplotlib.pyplot as plt
+import random
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Subset
-import random
+import matplotlib.pyplot as plt
 
-import utils
 from dataset import CVATDataset
-from model import MiniUNet
-from tqdm import tqdm
+from segmentation_model import MiniUNet
+import utils
+import train_utils
 
 
 def iou(prediction, target):
@@ -41,104 +40,7 @@ def iou(prediction, target):
     return batch_ious
 
 
-def save_chkpt(
-    model,
-    epoch,
-    val_miou,
-    train_loss_list,
-    train_miou_list,
-    val_loss_list,
-    val_miou_list,
-):
-    """
-    In:
-        model: MiniUNet instance in this homework, trained model.
-        epoch: int, current epoch number.
-        val_miou: float, mIoU of the validation set.
-        train_loss_list: list of training loss over past epochs
-        train_miou_list: list of training mIoU over past epochs
-        val_loss_list: list of validation loss over past epochs
-        val_miou_list: list of validation mIoU over past epochs
-    Out:
-        None.
-    Purpose:
-        Save parameters of the trained model.
-    """
-    state = {
-        "model_state_dict": model.state_dict(),
-        "epoch": epoch,
-        "model_miou": val_miou,
-        "train_loss_list": train_loss_list,
-        "train_miou_list": train_miou_list,
-        "val_loss_list": val_loss_list,
-        "val_miou_list": val_miou_list,
-    }
-    torch.save(state, "checkpoint.pth.tar")
-    print("checkpoint saved at epoch", epoch)
-
-
-def load_chkpt(model, chkpt_path, device):
-    """
-    In:
-        model: MiniUNet instance in this homework to accept the saved parameters.
-        chkpt_path: string, path of the checkpoint to be loaded.
-    Out:
-        model: MiniUNet instance in this homework, with its parameters loaded from the checkpoint.
-        epoch: int, epoch at which the checkpoint is saved.
-        model_miou: float, mIoU on the validation set at the checkpoint.
-        train_loss_list: list of training loss over past epochs
-        train_miou_list: list of training mIoU over past epochs
-        val_loss_list: list of validation loss over past epochs
-        val_miou_list: list of validation mIoU over past epochs
-    Purpose:
-        Load model parameters from saved checkpoint.
-    """
-    checkpoint = torch.load(chkpt_path, weights_only=False, map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
-    epoch = checkpoint["epoch"]
-    model_miou = checkpoint["model_miou"]
-    train_loss_list = checkpoint["train_loss_list"]
-    train_miou_list = checkpoint["train_miou_list"]
-    val_loss_list = checkpoint["val_loss_list"]
-    val_miou_list = checkpoint["val_miou_list"]
-
-    return (
-        model,
-        epoch,
-        model_miou,
-        train_loss_list,
-        train_miou_list,
-        val_loss_list,
-        val_miou_list,
-    )
-
-
-def save_learning_curve(train_loss_list, train_miou_list, val_loss_list, val_miou_list):
-    """
-    In:
-        train_loss, train_miou, val_loss, val_miou: list of floats, where the length is how many epochs you trained.
-    Out:
-        None.
-    Purpose:
-        Plot and save the learning curve.
-    """
-    epochs = np.arange(1, len(train_loss_list) + 1)
-    plt.figure()
-    lr_curve_plot = plt.plot(epochs, train_loss_list, color="navy", label="train_loss")
-    plt.plot(epochs, train_miou_list, color="teal", label="train_mIoU")
-    plt.plot(epochs, val_loss_list, color="orange", label="val_loss")
-    plt.plot(epochs, val_miou_list, color="gold", label="val_mIoU")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", borderaxespad=0.0)
-    plt.xticks(epochs, epochs)
-    plt.yticks(np.arange(10) * 0.1, [f"0.{i}" for i in range(10)])
-    plt.xlabel("epoch")
-    plt.ylabel("mIoU")
-    plt.grid(True)
-    plt.savefig("learning_curve.png", bbox_inches="tight")
-    plt.close()
-
-
-def save_prediction(model, device, dataloader, dataset, dataset_dir):
+def save_prediction(model, device, dataloader, dataset, output_dir):
     """
     Save predicted masks for a dataset, works with Subset or full dataset.
 
@@ -147,9 +49,9 @@ def save_prediction(model, device, dataloader, dataset, dataset_dir):
         device: torch.device
         dataloader: DataLoader
         dataset: Dataset or Subset (used to get original indices / filenames)
-        dataset_dir: output directory for predictions
+        output_dir: output directory for predictions
     """
-    pred_dir = os.path.join(dataset_dir, "pred/")
+    pred_dir = os.path.join(output_dir, "pred/")
     os.makedirs(pred_dir, exist_ok=True)
     print(f"Saving predicted masks to {pred_dir}")
 
@@ -199,7 +101,7 @@ def train(model, device, train_loader, criterion, optimizer):
         train_loss_sum += loss.item() * batch_size
         train_iou_sum += np.sum(iou(outputs, targets))
 
-        if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == total_batches:
+        if (batch_idx + 1) % 3 == 0 or (batch_idx + 1) == total_batches:
             print(f"  Batch {batch_idx+1}/{total_batches} - loss: {loss.item():.4f}")
 
     train_loss = train_loss_sum / data_size
@@ -232,6 +134,7 @@ def val(model, device, val_loader, criterion):
 
 
 def main():
+    train_utils.setup_single_threaded_torch()
     # Load arguments
     parser = ArgumentParser()
     parser.add_argument(
@@ -242,40 +145,38 @@ def main():
     args = parser.parse_args()
 
     # Check if GPU is being detected
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        try:
-            if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-                device = torch.device("mps")
-            else:
-                device = torch.device("cpu")
-        except:
-            device = torch.device("cpu")
-    print("device:", device)
+    device = train_utils.get_device()
 
     # Define directories (running from scripts/)
-    root_dir = "../data/"
+    root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/")
 
     # Create Datasets.
     # Load all dataset (assumes has_gt=True)
-    full_dataset = CVATDataset(dataset_dir=root_dir, has_gt=True)
+    full_dataset = CVATDataset(
+        dataset_dir=root_dir, has_gt=True, for_classification=False
+    )
+
+    # Filter to only indices with objects
+    indices_with_objects = [
+        i for i, has_feat in enumerate(full_dataset.has_feature_list) if has_feat == 1
+    ]
+    print(
+        f"Using {len(indices_with_objects)} of {len(full_dataset)} frames with objects."
+    )
 
     # Shuffle and split indices
-    num_samples = len(full_dataset)
-    indices = list(range(num_samples))
-    random.seed(42)  # for reproducibility
-    random.shuffle(indices)
-
-    split = int(0.8 * num_samples)  # 80% train, 20% val
-    train_indices, val_indices = indices[:split], indices[split:]
+    random.seed(42)
+    random.shuffle(indices_with_objects)
+    split = int(0.8 * len(indices_with_objects))
+    train_indices = indices_with_objects[:split]
+    val_indices = indices_with_objects[split:]
 
     # Create Subsets
     train_dataset = Subset(full_dataset, train_indices)
     val_dataset = Subset(full_dataset, val_indices)
 
     # Prepare Dataloaders. You can use check_dataloader() to check your implementation.
-    BATCH_SIZE = 4
+    BATCH_SIZE = 16
     NUM_WORKERS = 0
     train_loader = DataLoader(
         train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
@@ -286,12 +187,6 @@ def main():
     # test_loader = DataLoader(
     #     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS
     # )
-    # print('\ncheck_dataloader: train_dataloader:')
-    # check_dataloader(train_loader)
-    # print('\ncheck_dataloader: val_dataloader:')
-    # check_dataloader(val_loader)
-    # print('\ncheck_dataloader: test_dataloader:')
-    # check_dataloader(test_loader)
 
     # Prepare model
     model = MiniUNet().to(device)
@@ -302,15 +197,14 @@ def main():
 
     # Load checkpoint if provided
     if args.checkpoint:
-        (
-            model,
-            epoch,
-            best_miou,
-            train_loss_list,
-            train_miou_list,
-            val_loss_list,
-            val_miou_list,
-        ) = load_chkpt(model, args.checkpoint, device)
+        model, epoch, metric = train_utils.load_checkpoint(
+            model, args.checkpoint, device
+        )
+        best_miou = metric["val_miou"]
+        train_loss_list = metric["train_loss_list"]
+        train_miou_list = metric["train_miou_list"]
+        val_loss_list = metric["val_loss_list"]
+        val_miou_list = metric["val_miou_list"]
         print(
             f"Loaded a checkpoint from {args.checkpoint} at epoch {epoch} with best mIoU {best_miou}. Resuming training from epoch {epoch + 1}."
         )
@@ -344,26 +238,49 @@ def main():
         print("Validation loss & mIoU: %0.2f %0.2f" % (val_loss, val_miou))
         if val_miou > best_miou:
             best_miou = val_miou
-            save_chkpt(
+            train_utils.save_checkpoint(
                 model,
                 epoch,
-                val_miou,
-                train_loss_list,
-                train_miou_list,
-                val_loss_list,
-                val_miou_list,
+                {
+                    "train_loss_list": train_loss_list,
+                    "train_miou_list": train_miou_list,
+                    "val_loss_list": val_loss_list,
+                    "val_miou_list": val_miou_list,
+                },
+                filename="checkpoint.pth.tar",
             )
-        save_learning_curve(
-            train_loss_list, train_miou_list, val_loss_list, val_miou_list
+        train_utils.save_learning_curve(
+            metrics={
+                "train_loss": train_loss_list,
+                "val_loss": val_loss_list,
+                "train_miou": train_miou_list,
+                "val_miou": val_miou_list,
+            },
+            filename="learning_curve.png",
+            title="Segmentation Training Curve",
         )
         print("---------------------------------")
         epoch += 1
 
     # Load the best checkpoint, use save_prediction() on the validation set and test set
-    model, _, _, _, _, _, _ = load_chkpt(model, "checkpoint.pth.tar", device)
+    load_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "../checkpoints/"
+    )
+    model, _, _ = train_utils.load_checkpoint(
+        model, os.path.join(load_dir, "checkpoint.pth.tar"), device
+    )
     save_prediction(model, device, val_loader, val_dataset, root_dir)
     # save_prediction(model, device, test_loader, test_dir)
-    save_learning_curve(train_loss_list, train_miou_list, val_loss_list, val_miou_list)
+    train_utils.save_learning_curve(
+        metrics={
+            "train_loss": train_loss_list,
+            "val_loss": val_loss_list,
+            "train_miou": train_miou_list,
+            "val_miou": val_miou_list,
+        },
+        filename="learning_curve.png",
+        title="Segmentation Training Curve",
+    )
 
 
 if __name__ == "__main__":

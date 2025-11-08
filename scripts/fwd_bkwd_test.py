@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 import random
 from dataset import CVATDataset
-from model import MiniUNet
+from scripts.segmentation_model import MiniUNet
 
 root_dir = "../data/"
 dataset = CVATDataset(dataset_dir=root_dir, has_gt=True)

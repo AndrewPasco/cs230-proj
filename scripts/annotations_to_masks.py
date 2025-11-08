@@ -2,6 +2,7 @@ import os
 import cv2
 import xml.etree.ElementTree as ET
 import numpy as np
+import pandas as pd
 from PIL import Image
 
 # --- Frame ranges to include ---
@@ -20,6 +21,7 @@ video_path = "/home/apasco/cs230/cs230-proj/data/data-2025-10-09.mp4"
 xml_path = "/home/apasco/cs230/cs230-proj/data/annotations-2025-10-09-v2.xml"
 images_dir = "/home/apasco/cs230/cs230-proj/data/images"
 masks_dir = "/home/apasco/cs230/cs230-proj/data/masks"
+labels_csv = "/home/apasco/cs230/cs230-proj/data/labels.csv"
 
 os.makedirs(images_dir, exist_ok=True)
 os.makedirs(masks_dir, exist_ok=True)
@@ -30,12 +32,11 @@ root = tree.getroot()
 
 # Build mapping: image_name -> list of annotations
 frame_annotations = {}
-
 for image_tag in root.findall("image"):
     img_name = image_tag.attrib["name"]
     annos = []
 
-    # Ellipses
+    # Ellipse annotations
     for ellipse in image_tag.findall("ellipse"):
         cx = float(ellipse.attrib["cx"])
         cy = float(ellipse.attrib["cy"])
@@ -46,7 +47,7 @@ for image_tag in root.findall("image"):
             {"type": "ellipse", "cx": cx, "cy": cy, "rx": rx, "ry": ry, "label": label}
         )
 
-    # Polygons
+    # Polygon annotations
     for poly in image_tag.findall("polygon"):
         label = poly.attrib["label"]
         points_str = poly.attrib["points"]
@@ -71,89 +72,73 @@ class_labels = sorted(
 class_map = {label: i + 1 for i, label in enumerate(class_labels)}  # background=0
 print("Class map:", class_map)
 
-# --- Precompute allowed frame indices ---
-allowed_frames = set()
-for start, end in frames:
-    allowed_frames.update(range(start, end + 1))
 
-# --- Open video ---
+# --- Video iteration helper ---
+def frame_in_ranges(idx, ranges):
+    for lo, hi in ranges:
+        if lo <= idx <= hi:
+            return True
+    return False
+
+
+# --- Process video ---
 cap = cv2.VideoCapture(video_path)
 frame_idx = 0
+label_records = []  ### NEW ###
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    if frame_idx not in allowed_frames:
+    if not frame_in_ranges(frame_idx, frames):
         frame_idx += 1
         continue
 
     frame_name = f"frame_{frame_idx:06d}"
+    rgb_path = os.path.join(images_dir, f"{frame_name}.png")
+    mask_path = os.path.join(masks_dir, f"{frame_name}.png")
+
+    # --- Save the RGB frame ---
+    cv2.imwrite(rgb_path, frame)
+
+    # --- Create a mask (all zeros initially) ---
+    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+    has_annotation = 0
 
     if frame_name in frame_annotations:
-        rgb_path = os.path.join(images_dir, f"{frame_name}.png")
-        cv2.imwrite(rgb_path, frame)
+        annos = frame_annotations[frame_name]
 
-        mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-        ellipses = [a for a in frame_annotations[frame_name] if a["type"] == "ellipse"]
-        polys = [a for a in frame_annotations[frame_name] if a["type"] == "polygon"]
-
-        # If there are two ellipses, remove the smaller (inner) one
+        # If there are two ellipses, remove the inner one (smaller rx+ry)
+        ellipses = [a for a in annos if a["type"] == "ellipse"]
         if len(ellipses) == 2:
-            areas = [e["rx"] * e["ry"] for e in ellipses]
-            outer_idx = int(np.argmax(areas))
-            inner_idx = 1 - outer_idx
-            outer = ellipses[outer_idx]
-            inner = ellipses[inner_idx]
-            label = outer["label"]
+            ellipses.sort(key=lambda e: e["rx"] + e["ry"], reverse=True)
+            annos = [ellipses[0]] + [a for a in annos if a["type"] != "ellipse"]
 
-            # Draw outer ellipse
-            cv2.ellipse(
-                mask,
-                (int(round(outer["cx"])), int(round(outer["cy"]))),
-                (int(round(outer["rx"])), int(round(outer["ry"]))),
-                0,
-                0,
-                360,
-                class_map[label],
-                -1,
-            )
-            # Cut out the inner ellipse (set to background)
-            cv2.ellipse(
-                mask,
-                (int(round(inner["cx"])), int(round(inner["cy"]))),
-                (int(round(inner["rx"])), int(round(inner["ry"]))),
-                0,
-                0,
-                360,
-                0,
-                -1,
-            )
-        else:
-            # Draw single ellipse (normal case)
-            for e in ellipses:
-                cv2.ellipse(
-                    mask,
-                    (int(round(e["cx"])), int(round(e["cy"]))),
-                    (int(round(e["rx"])), int(round(e["ry"]))),
-                    0,
-                    0,
-                    360,
-                    class_map[e["label"]],
-                    -1,
-                )
+        for anno in annos:
+            if anno["type"] == "ellipse":
+                center = (int(round(anno["cx"])), int(round(anno["cy"])))
+                axes = (int(round(anno["rx"])), int(round(anno["ry"])))
+                cv2.ellipse(mask, center, axes, 0, 0, 360, class_map[anno["label"]], -1)
+            elif anno["type"] == "polygon":
+                cv2.fillPoly(mask, [anno["points"]], class_map[anno["label"]])
 
-        # Draw any polygons
-        for p in polys:
-            cv2.fillPoly(mask, [p["points"]], class_map[p["label"]])
+        has_annotation = 1
 
-        mask_path = os.path.join(masks_dir, f"{frame_name}.png")
-        Image.fromarray(mask).save(mask_path)
+        # --- Only save mask if non-empty ---
+        if np.any(mask):
+            Image.fromarray(mask).save(mask_path)
 
-        print(f"[{frame_idx}] Saved {rgb_path} and {mask_path}")
+    # --- Record binary label (even if no annotation) ---
+    label_records.append({"frame_name": frame_name, "has_feature": has_annotation})
 
+    print(f"[{frame_idx}] saved {rgb_path}, label={has_annotation}")
     frame_idx += 1
 
 cap.release()
+
+# --- Write labels.csv ---
+df = pd.DataFrame(label_records)
+df.to_csv(labels_csv, index=False)
+print(f"Labels saved to {labels_csv} with {len(df)} entries.")
 print("Done!")
