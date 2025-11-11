@@ -1,9 +1,10 @@
+import os
 from torch.utils.data import DataLoader, Subset
 import random
 import torch
 from dataset import CVATDataset
 
-root_dir = "../data/"
+root_dir = os.path.join(os.path.dirname(__file__), "../../data/")
 full_dataset = CVATDataset(dataset_dir=root_dir, has_gt=True)
 
 num_samples = len(full_dataset)
@@ -22,7 +23,6 @@ for i, batch in enumerate(loader):
     print(
         f"Batch {i}: input.shape={batch['input'].shape}, target.shape={batch['target'].shape}"
     )
-    # Print dtype and some stats
     print(
         "  input dtype:",
         batch["input"].dtype,

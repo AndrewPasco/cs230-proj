@@ -31,10 +31,10 @@ for img_path in sorted(glob(os.path.join(pred_dir, "*_pred.png"))):
 
     for label_id in range(1, num_labels):  # skip background
         component_mask = (labels == label_id).astype(np.uint8)
-        coords = np.column_stack(np.where(component_mask > 0))  # (y,x) coordinates
+        coords = np.column_stack(np.where(component_mask > 0))  # (y,x)
 
         if len(coords) < 2:
-            continue  # skip tiny components
+            continue
 
         # PCA for direction
         mean = coords.mean(axis=0)
@@ -43,7 +43,7 @@ for img_path in sorted(glob(os.path.join(pred_dir, "*_pred.png"))):
         eigvals, eigvecs = np.linalg.eig(cov)
         principal_dir = eigvecs[:, np.argmax(eigvals)]
 
-        # Scale vector for visualization
+        # Scale up for viz
         scale = 50
         pt1 = tuple(mean[::-1].astype(int))
         pt2 = tuple((mean + principal_dir * scale)[::-1].astype(int))

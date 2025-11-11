@@ -1,3 +1,9 @@
+"""
+Segmentation training script. Inspired by CS227 course material.
+
+Currently supports training on a CPU with 80/20 train/val split.
+"""
+
 import os
 from argparse import ArgumentParser
 import random

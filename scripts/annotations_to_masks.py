@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import cv2
 import xml.etree.ElementTree as ET
@@ -5,7 +7,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
-# --- Frame ranges to include ---
+# Frame ranges to include
 frames = [
     [0, 268],
     [286, 295],
@@ -16,7 +18,7 @@ frames = [
     [764, 812],
 ]
 
-# --- Paths ---
+# Paths
 video_path = "/home/apasco/cs230/cs230-proj/data/data-2025-10-09.mp4"
 xml_path = "/home/apasco/cs230/cs230-proj/data/annotations-2025-10-09-v2.xml"
 images_dir = "/home/apasco/cs230/cs230-proj/data/images"
@@ -26,7 +28,7 @@ labels_csv = "/home/apasco/cs230/cs230-proj/data/labels.csv"
 os.makedirs(images_dir, exist_ok=True)
 os.makedirs(masks_dir, exist_ok=True)
 
-# --- Load XML ---
+# Load XML
 tree = ET.parse(xml_path)
 root = tree.getroot()
 
@@ -65,7 +67,7 @@ for image_tag in root.findall("image"):
 
 print(f"Found {len(frame_annotations)} annotated frames.")
 
-# --- Label mapping ---
+# Label mapping
 class_labels = sorted(
     {anno["label"] for annos in frame_annotations.values() for anno in annos}
 )
@@ -73,7 +75,7 @@ class_map = {label: i + 1 for i, label in enumerate(class_labels)}  # background
 print("Class map:", class_map)
 
 
-# --- Video iteration helper ---
+# Video iteration helper
 def frame_in_ranges(idx, ranges):
     for lo, hi in ranges:
         if lo <= idx <= hi:
@@ -81,10 +83,10 @@ def frame_in_ranges(idx, ranges):
     return False
 
 
-# --- Process video ---
+# Process video
 cap = cv2.VideoCapture(video_path)
 frame_idx = 0
-label_records = []  ### NEW ###
+label_records = []
 
 while True:
     ret, frame = cap.read()
@@ -99,10 +101,10 @@ while True:
     rgb_path = os.path.join(images_dir, f"{frame_name}.png")
     mask_path = os.path.join(masks_dir, f"{frame_name}.png")
 
-    # --- Save the RGB frame ---
+    # Save the RGB frame
     cv2.imwrite(rgb_path, frame)
 
-    # --- Create a mask (all zeros initially) ---
+    # Create a mask
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
     has_annotation = 0
 
@@ -125,11 +127,11 @@ while True:
 
         has_annotation = 1
 
-        # --- Only save mask if non-empty ---
+        # Only save mask if non-empty
         if np.any(mask):
             Image.fromarray(mask).save(mask_path)
 
-    # --- Record binary label (even if no annotation) ---
+    # Record binary label (even if no annotation)
     label_records.append({"frame_name": frame_name, "has_feature": has_annotation})
 
     print(f"[{frame_idx}] saved {rgb_path}, label={has_annotation}")
@@ -137,7 +139,7 @@ while True:
 
 cap.release()
 
-# --- Write labels.csv ---
+# Write labels.csv
 df = pd.DataFrame(label_records)
 df.to_csv(labels_csv, index=False)
 print(f"Labels saved to {labels_csv} with {len(df)} entries.")

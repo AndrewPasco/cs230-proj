@@ -2,7 +2,6 @@ import os
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-import numpy as np
 import utils
 import cv2
 
@@ -33,7 +32,7 @@ class CVATDataset(Dataset):
             ]
         )
 
-        # --- Collect image and mask names ---
+        # Collect image and mask names
         images_path = os.path.join(dataset_dir, "images")
         masks_path = os.path.join(dataset_dir, "masks")
 
@@ -44,7 +43,7 @@ class CVATDataset(Dataset):
             else set()
         )
 
-        # --- Precompute feature labels --- Assumes mask presence indicates feature presence
+        # Precompute feature labels (Assumes mask presence indicates feature presence)
         self.has_feature_list = [
             1 if os.path.splitext(f)[0] in self.mask_basenames else 0
             for f in self.img_files
@@ -57,14 +56,14 @@ class CVATDataset(Dataset):
         filename = os.path.splitext(self.img_files[idx])[0]
         img_path = os.path.join(self.dataset_dir, "images", self.img_files[idx])
 
-        # --- Load and preprocess image ---
+        # Load and preprocess image
         img = utils.read_rgb(img_path)
         img = cv2.resize(
             img, (self.img_size[1], self.img_size[0]), interpolation=cv2.INTER_LINEAR
         )
         img = self.transform(img)
 
-        # --- Basic fields ---
+        # Basic fields
         sample = {
             "input": img,
             "filename": filename,
@@ -73,11 +72,11 @@ class CVATDataset(Dataset):
             ),
         }
 
-        # --- For classification tasks ---
+        # For classification tasks
         if self.for_classification:
             sample["target"] = sample["has_feature"]
 
-        # --- For segmentation tasks (if GT available) ---
+        # For segmentation tasks (if GT available)
         elif self.has_gt and sample["has_feature"] == 1:
             mask_path = os.path.join(self.dataset_dir, "masks", f"{filename}.png")
             mask = utils.read_mask(mask_path)

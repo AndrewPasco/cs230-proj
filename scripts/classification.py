@@ -10,7 +10,7 @@ from dataset import CVATDataset
 import train_utils
 
 
-# --- Setup ---
+# Setup
 train_utils.setup_single_threaded_torch()
 DEVICE = train_utils.get_device()
 
@@ -25,8 +25,7 @@ LR = 1e-4
 VAL_SPLIT = 0.2
 
 
-# --- Training & Validation Loops ---
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train(model, loader, criterion, optimizer, device):
     model.train()
     running_loss, correct, total = 0.0, 0, 0
     batch_idx = 1
@@ -72,7 +71,7 @@ def validate(model, loader, criterion, device):
 
 
 def main():
-    # Load arguments
+    # Load args
     parser = ArgumentParser()
     parser.add_argument(
         "--checkpoint",
@@ -81,7 +80,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # --- Dataset ---
+    # Dataset
     full_dataset = CVATDataset(
         DATASET_DIR, has_gt=False, img_size=IMG_SIZE, for_classification=True
     )
@@ -99,9 +98,9 @@ def main():
     )
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
-    # --- Model, Loss, Optimizer ---
+    # Model, Loss, Optimizer
     model = ResNetBinaryClassifier(pretrained=True, freeze_backbone=True).to(DEVICE)
-    criterion = nn.BCELoss()
+    criterion = nn.BCELoss()  # Binary Cross Entropy Loss
     optimizer = optim.Adam(model.parameters(), lr=LR)
 
     # Load checkpoint if provided
@@ -117,7 +116,7 @@ def main():
         print(
             f"Loaded a checkpoint from {args.checkpoint} at epoch {epoch} with best acc {best_acc}. Resuming training from epoch {epoch + 1}."
         )
-        epoch += 1  # start training from the next epoch
+        epoch += 1
     else:
         epoch = 1
         best_acc = float("-inf")
@@ -133,9 +132,7 @@ def main():
 
     while epoch <= EPOCHS:
         print(f"\nEpoch ({epoch}/{EPOCHS})")
-        train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, DEVICE
-        )
+        train_loss, train_acc = train(model, train_loader, criterion, optimizer, DEVICE)
         val_loss, val_acc = validate(model, val_loader, criterion, DEVICE)
 
         train_loss_list.append(train_loss)
