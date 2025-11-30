@@ -1,0 +1,42 @@
+"""
+Configuration file for tendon labeling and mask generation pipeline.
+"""
+
+# Paths
+DATA_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\master"
+OUTPUT_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\master\output"
+STL_DIR = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\master"
+
+# Phantom mapping
+PHANTOM_STL_MAP = {
+    "p1": "p1.stl",
+    "p2": "p2.stl",
+    "p3": "p3.stl",
+    "p4": "p4.stl",
+}
+
+# Camera intrinsics
+CAMERA = {
+    "hfov_deg": 120,
+    "vfov_deg": 66,
+    "cam_z": 0.0127 + 0.006594 + 0.005,  # from TendonLabeler
+}
+
+# Processing params
+FORCE_THRESHOLD_N = 10.0  # hysteresis threshold
+KEYFRAME_INTERVAL = 10    # annotate centerline every N frames
+FRAME_SAMPLING = {
+    "mode": "every_n",    # "every_n" or "uniform_m"
+    "n": 1,               # for every_n: take every nth frame
+    "m": 50,              # for uniform_m: sample m frames per window
+}
+
+# CSV column mappings (so agent knows your file formats)
+CAMERA_FRAMES_COLS = ["time", "frame_number", "image_path"]
+TCP_POSE_COLS = ["time", "x", "y", "z", "qx", "qy", "qz", "qw"]
+WRENCH_DATA_COLS = ["time", "sensor", "fx", "fy", "fz", "tx", "ty", "tz"]  # adjust as needed
+
+# Column name mapping for compatibility
+TIME_COL = "time"
+FRAME_IDX_COL = "frame_number"
+IMAGE_PATH_COL = "image_path"
