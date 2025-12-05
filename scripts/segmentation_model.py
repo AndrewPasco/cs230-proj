@@ -33,7 +33,7 @@ class MiniUNet(nn.Module):
 
         self.conv9 = nn.Conv2d(48, 16, kernel_size=3, padding=1)
 
-        self.conv1x1 = nn.Conv2d(16, 6, kernel_size=1, padding=0)
+        self.conv1x1 = nn.Conv2d(16, 2, kernel_size=1, padding=0)
 
     def forward(self, x):
         """
@@ -77,7 +77,7 @@ class MiniUNet(nn.Module):
 
 if __name__ == "__main__":
     model = MiniUNet()
-    input_tensor = torch.zeros([1, 3, 240, 320])
+    input_tensor = torch.zeros([1, 3, 160, 160])
     output = model(input_tensor)
     print("output size:", output.size())
     print(model)

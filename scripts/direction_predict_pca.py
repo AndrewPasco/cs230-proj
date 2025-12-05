@@ -71,3 +71,23 @@ df.to_csv(os.path.join(out_dir, "predicted_directions.csv"), index=False)
 
 print(f"Processed {len(glob(os.path.join(pred_dir, '*_pred.png')))} images.")
 print(f"Results saved to {out_dir}")
+
+
+def img_pca_dir(mask):
+    """
+    Given a binary mask, compute the principal direction using PCA.
+    Returns the principal direction vector (vx, vy) and th e centroid (cx, cy).
+    """
+    y_idxs, x_idxs = np.where(mask > 0)
+    if len(x_idxs) < 2:
+        return (0, 0), (0, 0)
+
+    points = np.column_stack((x_idxs, y_idxs))
+    mean = np.mean(points, axis=0)
+    centered = points - mean
+
+    cov = np.cov(centered, rowvar=False)
+    eigvals, eigvecs = np.linalg.eig(cov)
+    principal_dir = eigvecs[:, np.argmax(eigvals)]
+
+    return (principal_dir[0], principal_dir[1]), (mean[0], mean[1])

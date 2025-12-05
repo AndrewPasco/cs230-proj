@@ -109,3 +109,53 @@ def save_learning_curve(metrics, filename="learning_curve.png", title=None):
     plt.savefig(path, bbox_inches="tight")
     plt.close()
     print(f"Learning curve saved: {path}")
+
+
+def save_batch_loss_curve(
+    batch_loss_list,
+    epoch_loss_list,
+    total_batches_per_epoch,
+    filename="learning_curves/batch_loss_curve.png",
+    plot_interval=10,
+):
+    plt.figure(figsize=(12, 6))
+
+    num_batches = len(batch_loss_list)
+    batch_iterations = np.arange(1, num_batches + 1)
+
+    plot_indices = [
+        i
+        for i, _ in enumerate(batch_iterations)
+        if (i + 1) % plot_interval == 0 or i == num_batches - 1
+    ]
+
+    plt.plot(
+        batch_iterations,
+        batch_loss_list,
+        label="Batch Loss",
+        color="gray",
+        alpha=0.5,
+        linewidth=0.5,
+    )
+
+    if epoch_loss_list:
+        epoch_iterations = (
+            np.arange(1, len(epoch_loss_list) + 1) * total_batches_per_epoch
+            - 0.5 * total_batches_per_epoch
+        )
+        plt.plot(
+            epoch_iterations,
+            epoch_loss_list,
+            label="Epoch Mean Loss",
+            color="red",
+            linewidth=2.0,
+        )
+
+    plt.xlabel("Batch Number")
+    plt.ylabel("Loss")
+    plt.title("Training Loss: Batch vs. Epoch Mean")
+    plt.legend()
+    plt.grid(True, linestyle="--")
+    plt.savefig(filename)
+    plt.close()
+    print(f"Batch loss curve saved: {filename}")

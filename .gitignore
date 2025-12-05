@@ -1,3 +1,7 @@
 /.vscode
 /data
 *.zip
+/old_data
+/output
+*.pyc
+__pycache__/

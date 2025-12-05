@@ -4,8 +4,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
 
-from classification_model import ResNetBinaryClassifier
+from classification_model import ResNetBinaryClassifier, MobileNetBinaryClassifier
 from dataset import CVATDataset
 import train_utils
 
@@ -17,7 +20,7 @@ DEVICE = train_utils.get_device()
 ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATASET_DIR = os.path.join(ROOT_DIR, "data")
 IMG_SIZE = (240, 320)
-SAVE_NAME = "classifier_resnet18.pth.tar"
+SAVE_NAME = "classifier_mobilenetv3_small.pth.tar"
 
 EPOCHS = 10
 BATCH_SIZE = 8
@@ -28,9 +31,10 @@ VAL_SPLIT = 0.2
 def train(model, loader, criterion, optimizer, device):
     model.train()
     running_loss, correct, total = 0.0, 0, 0
-    batch_idx = 1
-    total_batches = len(loader)
-    for batch in loader:
+
+    train_bar = tqdm(loader, desc="Training")
+
+    for batch in train_bar:
         imgs = batch["input"].to(device)
         labels = batch["has_feature"].float().unsqueeze(1).to(device)
 
@@ -40,10 +44,9 @@ def train(model, loader, criterion, optimizer, device):
         loss.backward()
         optimizer.step()
 
-        if (batch_idx) % 3 == 0 or (batch_idx) == total_batches:
-            print(f"  Batch {batch_idx}/{total_batches} - loss: {loss.item():.4f}")
-
-        batch_idx += 1
+        train_bar.set_postfix(
+            loss=f"{loss.item():.4f}",
+        )
 
         running_loss += loss.item()
 
@@ -53,11 +56,98 @@ def train(model, loader, criterion, optimizer, device):
     return running_loss / len(loader), correct / total
 
 
+def visualize_batch(batch, num_samples=4):
+    """
+    Visualize a batch of images with their labels.
+
+    Args:
+        batch: dict with 'input' tensor and 'has_feature' labels
+        num_samples: number of images to display
+    """
+    imgs = batch["input"]  # (B, 3, H, W)
+    labels = batch["has_feature"]  # (B,)
+
+    # Denormalize images
+    mean = np.array([0.442, 0.417, 0.593]).reshape(3, 1, 1)
+    std = np.array([0.188, 0.190, 0.155]).reshape(3, 1, 1)
+
+    num_samples = min(num_samples, imgs.shape[0])
+    fig, axes = plt.subplots(1, num_samples, figsize=(15, 4))
+
+    if num_samples == 1:
+        axes = [axes]
+
+    for i in range(num_samples):
+        img = imgs[i].cpu().numpy()  # (3, H, W)
+
+        # Denormalize
+        img = img * std + mean
+        img = np.clip(img, 0, 1)
+
+        # Convert to (H, W, 3) for display
+        img = np.transpose(img, (1, 2, 0))
+
+        axes[i].imshow(img)
+        axes[i].set_title(f"Label: {labels[i].item()}\n(1=has_obj, 0=no_obj)")
+        axes[i].axis("off")
+
+    plt.tight_layout()
+    plt.savefig("classification_batch_visualization.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print("Saved visualization to classification_batch_visualization.png")
+
+
+def test_model_on_batch(model, batch, device):
+    """
+    Test model predictions on a batch and show results.
+    """
+    model.eval()
+    imgs = batch["input"].to(device)
+    labels = batch["has_feature"].float().unsqueeze(1).to(device)
+
+    with torch.no_grad():
+        outputs = model(imgs)
+        preds = (outputs > 0.5).float()
+
+    print("\n" + "=" * 50)
+    print("MODEL PREDICTION TEST")
+    print("=" * 50)
+    for i in range(len(labels)):
+        print(
+            f"Sample {i}: Label={labels[i].item():.0f}, "
+            f"Raw Output={outputs[i].item():.4f}, "
+            f"Prediction={preds[i].item():.0f}, "
+            f"Correct={preds[i].item() == labels[i].item()}"
+        )
+    print("=" * 50 + "\n")
+
+    return outputs, preds
+
+
+def check_dataset_balance(dataset):
+    """
+    Check the distribution of positive/negative samples.
+    """
+    has_feature_count = sum(dataset.original_has_feature_list)
+    total = len(dataset.original_has_feature_list)
+
+    print("\n" + "=" * 50)
+    print("DATASET BALANCE CHECK")
+    print("=" * 50)
+    print(f"Total samples: {total}")
+    print(f"Has feature (1): {has_feature_count} ({100*has_feature_count/total:.1f}%)")
+    print(
+        f"No feature (0): {total - has_feature_count} ({100*(total-has_feature_count)/total:.1f}%)"
+    )
+    print("=" * 50 + "\n")
+
+
 def validate(model, loader, criterion, device):
     model.eval()
     val_loss, correct, total = 0.0, 0, 0
+    val_bar = tqdm(loader, desc="Validation")
     with torch.no_grad():
-        for batch in loader:
+        for batch in val_bar:
             imgs = batch["input"].to(device)
             labels = batch["has_feature"].float().unsqueeze(1).to(device)
             outputs = model(imgs)
@@ -82,7 +172,7 @@ def main():
 
     # Dataset
     full_dataset = CVATDataset(
-        DATASET_DIR, has_gt=False, img_size=IMG_SIZE, for_classification=True
+        DATASET_DIR, has_gt=True, img_size=IMG_SIZE, for_segmentation=False
     )
 
     # Train/val split
@@ -98,8 +188,18 @@ def main():
     )
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
+    # Check dataset balance
+    check_dataset_balance(full_dataset)
+
+    # Visualize a batch from training set
+    sample_batch = next(iter(train_loader))
+    print(f"Sample batch image tensor size: {sample_batch['input'].shape}")
+    print(f"Sample batch labels: {sample_batch['has_feature']}")
+    visualize_batch(sample_batch, num_samples=min(4, BATCH_SIZE))
+
     # Model, Loss, Optimizer
-    model = ResNetBinaryClassifier(pretrained=True, freeze_backbone=True).to(DEVICE)
+    model = MobileNetBinaryClassifier(pretrained=True, freeze_backbone=True).to(DEVICE)
+    # model = ResNetBinaryClassifier(pretrained=True, freeze_backbone=True).to(DEVICE)
     criterion = nn.BCELoss()  # Binary Cross Entropy Loss
     optimizer = optim.Adam(model.parameters(), lr=LR)
 
@@ -173,6 +273,11 @@ def main():
         )
 
         epoch += 1
+
+    print("\n*** TESTING MODEL AFTER TRAINING ***")
+    final_test_batch = next(iter(val_loader))
+    visualize_batch(final_test_batch, num_samples=min(4, BATCH_SIZE))
+    test_model_on_batch(model, final_test_batch, DEVICE)
 
     print(f"Training complete. Best Val Acc: {best_acc:.3f}")
 
