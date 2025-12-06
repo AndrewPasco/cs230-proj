@@ -6,18 +6,12 @@ Current approach:
 
 Implemented: 
 - MiniUNet for segmentation
-- Detection network (transfer learned from ImageNet1K-V2)
-    - Layer 3 and 4 unfrozen
+- Detection network (transfer learned from MobileNetV3_Small)
     - Original output layer replaced with binary classification head
-        - 256-unit FC layer (dropout = 0.4) to single output with Sigmoid activation
+        - 256-unit FC layer (dropout = 0.2) to single output with Sigmoid activation
 - PCA-based direction prediction + image annotation
-
-TODO:
-
-- Object direction prediction
-    - Learning-based direction prediction
-
-- Integration of modularized pipeline for live inference on video
-
-- Alternative approach with 3D reconstruction based on surface normal prediction    
-    - Could use similar direction prediction approach given 3D mesh rather than segmented 2D contour
+- Inference pipeline with models in sequence
+    - ~10fps execution rate
+    - Currently creates annotated video as example of how live inference could look
+- Alternative approach with 3D reconstruction based on surface normal prediction 
+    - Can add this as final chain in inference (use segmentation mask to identify region for reconstruction)
