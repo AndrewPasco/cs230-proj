@@ -20,6 +20,41 @@ logger = logging.getLogger(__name__)
 REQUIRED_FILES = ["frames", "camera_frames.csv", "tcp_pose.csv", "wrench_data.csv"]
 RUN_PATTERN = re.compile(r"^(p\d+)_([a-z0-9]+)_(\d+N)(?:-.+)?$")
 
+# Load phantom configurations
+PHANTOM_CONFIGS = {}
+def load_phantom_configs():
+    """Load phantom configurations from JSON file."""
+    global PHANTOM_CONFIGS
+    config_path = Path(config.CONFIGS_ROOT) / config.PHANTOM_CONFIGS_FILE
+    if config_path.exists():
+        with open(config_path, "r") as f:
+            PHANTOM_CONFIGS = json.load(f)
+        logger.info(f"Loaded phantom configs from {config_path}")
+    else:
+        logger.warning(f"Phantom configs not found at {config_path}")
+
+def get_stl_config(phantom_type, motion_type):
+    """
+    Resolve STL file and rotation for a phantom + motion type.
+
+    Returns: {"stl_file": str, "rotation_deg": int} or None
+    """
+    if not PHANTOM_CONFIGS:
+        return None
+
+    phantom_cfg = PHANTOM_CONFIGS.get(phantom_type)
+    if not phantom_cfg:
+        logger.warning(f"Phantom type {phantom_type} not in configs")
+        return None
+
+    # Try exact motion type match first, fallback to "default"
+    stl_cfg = phantom_cfg.get(motion_type) or phantom_cfg.get("default")
+    if not stl_cfg:
+        logger.warning(f"No STL config for {phantom_type}/{motion_type}")
+        return None
+
+    return stl_cfg
+
 
 def discover_runs(data_root):
     """
@@ -56,12 +91,17 @@ def discover_runs(data_root):
 
         valid = len(missing_files) == 0
 
+        # Resolve STL configuration
+        stl_cfg = get_stl_config(phantom_type, motion_type)
+
         run_entry = {
             "run_id": folder_name,
             "path": str(item.absolute()),
             "phantom_type": phantom_type,
             "motion_type": motion_type,
             "force_label": force_label,
+            "stl_file": stl_cfg.get("stl_file") if stl_cfg else None,
+            "rotation_deg": stl_cfg.get("rotation_deg") if stl_cfg else 0,
             "valid": valid,
             "missing_files": missing_files,
         }
@@ -79,6 +119,7 @@ def discover_runs(data_root):
 def main():
     logger.info(f"Scanning DATA_ROOT: {config.DATA_ROOT}")
 
+    load_phantom_configs()
     runs = discover_runs(config.DATA_ROOT)
 
     valid_count = sum(1 for r in runs if r["valid"])
@@ -93,7 +134,8 @@ def main():
         }
     }
 
-    output_path = Path(config.DATA_ROOT).parent / "run_manifest.json"
+    output_path = Path(config.CONFIGS_ROOT) / "run_manifest.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(manifest, f, indent=2)
 

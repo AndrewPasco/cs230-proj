@@ -1,3 +1,10 @@
 /.vscode
 /data
 *.zip
+*.json
+*.csv
+*.npy
+*.jpg
+*.png
+__pycache__
+rawdata

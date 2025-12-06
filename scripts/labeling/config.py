@@ -3,17 +3,13 @@ Configuration file for tendon labeling and mask generation pipeline.
 """
 
 # Paths
-DATA_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\master"
-OUTPUT_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\master\output"
-STL_DIR = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\master"
+DATA_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\labeling\rawdata"
+CONFIGS_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\labeling\configs"
+OUTPUT_ROOT = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\labeling\output"
+STL_DIR = r"C:\Users\georg\Documents\Stanford\cs230\cs230-proj\scripts\labeling\rawdata"
 
-# Phantom mapping
-PHANTOM_STL_MAP = {
-    "p1": "p1.stl",
-    "p2": "p2.stl",
-    "p3": "p3.stl",
-    "p4": "p4.stl",
-}
+# Phantom configuration file (maps phantom + motion type → STL file + rotation)
+PHANTOM_CONFIGS_FILE = "phantom_configs.json"
 
 # Camera intrinsics
 CAMERA = {
@@ -23,7 +19,7 @@ CAMERA = {
 }
 
 # Processing params
-FORCE_THRESHOLD_N = 10.0  # hysteresis threshold
+FORCE_THRESHOLD_N = 12.0  # hysteresis threshold
 KEYFRAME_INTERVAL = 10    # annotate centerline every N frames
 FRAME_SAMPLING = {
     "mode": "every_n",    # "every_n" or "uniform_m"

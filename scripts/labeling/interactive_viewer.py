@@ -1,10 +1,12 @@
 """
 Interactive mask viewer using OpenCV.
 
-Navigate through frames with arrow keys or slider.
+Navigate through frames with letter keys.
 Keyboard controls:
-  - LEFT/RIGHT arrow: Previous/Next frame
+  - A/D: Previous/Next frame
+  - W/S: Jump -/+ 10 frames
   - SPACE: Toggle mask overlay on/off
+  - G: Go to specific frame number
   - ESC: Quit
 """
 
@@ -36,7 +38,7 @@ class MaskViewer:
 
         self.current_idx = 0
         self.show_overlay = True
-        self.window_name = "Mask Viewer - Arrow keys: navigate | SPACE: toggle overlay | ESC: quit"
+        self.window_name = "Mask Viewer - A/D: prev/next | W/S: jump | SPACE: toggle | G: go to | ESC: quit"
 
     def get_blended_image(self, idx):
         """Load and blend image with mask."""
@@ -112,22 +114,22 @@ class MaskViewer:
 
             if key == 27:  # ESC
                 break
-            elif key == 82:  # UP arrow
-                self.current_idx = max(0, self.current_idx - 10)
-                self.display_frame()
-            elif key == 84:  # DOWN arrow
-                self.current_idx = min(len(self.rows) - 1, self.current_idx + 10)
-                self.display_frame()
-            elif key == 81:  # LEFT arrow
+            elif key == ord("a"):  # A - previous frame
                 self.current_idx = max(0, self.current_idx - 1)
                 self.display_frame()
-            elif key == 83:  # RIGHT arrow
+            elif key == ord("d"):  # D - next frame
                 self.current_idx = min(len(self.rows) - 1, self.current_idx + 1)
+                self.display_frame()
+            elif key == ord("w"):  # W - jump back 10
+                self.current_idx = max(0, self.current_idx - 10)
+                self.display_frame()
+            elif key == ord("s"):  # S - jump forward 10
+                self.current_idx = min(len(self.rows) - 1, self.current_idx + 10)
                 self.display_frame()
             elif key == 32:  # SPACE
                 self.show_overlay = not self.show_overlay
                 self.display_frame()
-            elif key == ord("g"):  # Go to frame
+            elif key == ord("g"):  # G - Go to frame
                 try:
                     frame_num = int(input("Enter frame number (0-indexed): "))
                     if 0 <= frame_num < len(self.rows):
@@ -145,8 +147,10 @@ if __name__ == "__main__":
     viewer = MaskViewer()
     print(f"Loaded {len(viewer.rows)} frames")
     print("Controls:")
-    print("  LEFT/RIGHT arrow: Previous/Next frame")
-    print("  UP/DOWN arrow: Jump -/+ 10 frames")
+    print("  A: Previous frame")
+    print("  D: Next frame")
+    print("  W: Jump back 10 frames")
+    print("  S: Jump forward 10 frames")
     print("  SPACE: Toggle mask overlay")
     print("  G: Go to specific frame number")
     print("  ESC: Quit")

@@ -170,7 +170,7 @@ def process_run(run_entry, manifest_dir):
 
 
 def main():
-    manifest_path = Path(config.DATA_ROOT).parent / "run_manifest.json"
+    manifest_path = Path(config.CONFIGS_ROOT) / "run_manifest.json"
 
     if not manifest_path.exists():
         logger.error(f"run_manifest.json not found at {manifest_path}")
@@ -185,14 +185,15 @@ def main():
     for run_entry in manifest["runs"]:
         if run_entry["valid"]:
             try:
-                processed = process_run(run_entry, manifest_path.parent)
+                processed = process_run(run_entry, Path(config.DATA_ROOT))
                 all_runs.append(processed)
             except Exception as e:
                 logger.error(f"Error processing {run_entry['run_id']}: {e}")
 
     output_data = {"runs": all_runs}
 
-    output_path = manifest_path.parent / "valid_frames.json"
+    output_path = Path(config.CONFIGS_ROOT) / "valid_frames.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(output_data, f, indent=2)
 

@@ -228,7 +228,7 @@ class CenterlineAnnotator:
 
 
 def main():
-    valid_frames_path = Path(config.DATA_ROOT).parent / "valid_frames.json"
+    valid_frames_path = Path(config.CONFIGS_ROOT) / "valid_frames.json"
 
     if not valid_frames_path.exists():
         logger.error(f"valid_frames.json not found at {valid_frames_path}")
@@ -242,7 +242,8 @@ def main():
     logger.info("This is MANUAL - you must identify where the actual tendon center is!")
     annotator.annotate_interactive()
 
-    output_path = valid_frames_path.parent / "centerlines.json"
+    output_path = Path(config.CONFIGS_ROOT) / "centerlines.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     annotator.save_centerlines(output_path)
 
 
